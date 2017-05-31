@@ -1,0 +1,27 @@
+---
+- hosts: common
+  vars:
+   docker_dev: "/dev/xvdb"
+   docker_vg: "docker-vol"
+
+  remote_user: ec2-user
+  tasks:
+   - name: create the docker-storage-setup config file
+     template:
+       src: "./docker-storage-setup.j2"
+       dest: /etc/sysconfig/docker-storage-setup
+       owner: root
+       group: root
+       mode: 0644
+     become: true
+
+   - name: run docker storage setup
+     raw: docker-storage-setup
+     become: true
+     ignore_errors: yes
+
+   - name: Enable Services
+     service: name={{ item }} enabled=yes state=started
+     with_items:
+       - docker
+     become: true

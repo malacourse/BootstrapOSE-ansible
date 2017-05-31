@@ -11,16 +11,31 @@
       prompt: "Enter your Red Hat password: " 
       private: yes
 
-  remote_user: root
+  remote_user: ec2-user
   tasks:
+  - name: clean sm
+    raw: subscription-manager remove --all
+    become: true
+
   - name: register system
-    redhat_subscription: state=present username={{ username }} password={{ password }} autosubscribe=true
+    redhat_subscription: username={{ username }} password={{ password }} state=present 
+    become: true
+
+  - name: attach pool
+    raw: subscription-manager attach --pool=8a85f9843e3d687a013e3ddd471a083e
+    become: true
 
   - name: disable repos
-    raw: subscription-manager repos --disable=*
+    raw: subscription-manager repos --disable="*"
+    become: true
+
+  - name: yum disable
+    raw: yum-config-manager --disable \*
+    become: true
 
   - name: enable OSE repos
-    raw: subscription-manager repos --enable="rhel-7-server-rpms" --enable="rhel-7-server-extras-rpms" --enable="rhel-7-server-ose-3.3-rpms"
+    raw: subscription-manager repos --enable="rhel-7-server-rpms" --enable="rhel-7-server-extras-rpms" --enable="rhel-7-server-ose-3.5-rpms" --enable="rhel-7-fast-datapath-rpms"
+    become: true
 
   - name: install dependencies
     yum: name={{item}} state=present
@@ -32,11 +47,35 @@
     - iptables-services
     - bridge-utils 
     - bash-completion
+    - sos
+    - psacct
+    become: true
 
   - name: update all packages, this may take a while.
     yum: name=* state=latest
     register: out
+    become: true
 
   - name: install OSE installer
     yum: name=atomic-openshift-utils state=present
+    become: true
+
+  - name: install excluder
+    yum: name={{item}} state=present
+    with_items:
+    - atomic-openshift-excluder
+    - atomic-openshift-docker-excluder
+    become: true
+
+  - name: exclude docker
+    raw: atomic-openshift-excluder unexclude
+    become: true
+
+  - name: install docker
+    yum: name=docker state=present
+    become: true
+
+  - name: docker options
+    raw: sed -i '/OPTIONS=.*/c\OPTIONS="--selinux-enabled --insecure-registry 172.30.0.0/16 --log-opt max-size=1M --log-opt max-file=3"' /etc/sysconfig/docker
+    become: true
 
